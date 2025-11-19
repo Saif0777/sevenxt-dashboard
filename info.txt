@@ -1,0 +1,15 @@
+terminal 1(c/SAIF/Projects/seven-infotech-dashboard):
+
+npm run dev
+
+
+terminal 2:
+
+cd backend
+
+./venv/Scripts/python server.py
+
+
+
+Why Mechanical Keyboards are Better
+Focus on durability and typing sound. Target audience is gamers.
