@@ -13,3 +13,10 @@ cd backend
 
 Why Mechanical Keyboards are Better
 Focus on durability and typing sound. Target audience is gamers.
+
+
+git commands for update:
+
+git add .
+git commit -m "Added Image Generation Feature"
+git push
