@@ -1,5 +1,5 @@
 import requests
-from typing import Dict, Optional
+from typing import Dict, Optional,Any
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 import time
@@ -578,3 +578,32 @@ class CMSPublisher:
             print(f"Unknown CMS type: {cms_type}")
             return None
         return publisher(api_url, api_key, post_data, image_url)
+    
+    def post_webhook(self, webhook_url: str, payload: Dict[str, Any]) -> bool:
+        """
+        Generic method to send data to Make.com (or any webhook).
+        Returns True if successful (200 OK), False otherwise.
+        """
+        if not webhook_url:
+            print("❌ No Webhook URL provided.")
+            return False
+
+        try:
+            # Send payload
+            response = self.session.post(
+                webhook_url, 
+                json=payload, 
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            if response.status_code >= 200 and response.status_code < 300:
+                print(f"✅ Webhook Triggered. Make.com received payload.")
+                return True
+            else:
+                print(f"❌ Webhook Failed: {response.status_code} - {response.text}")
+                return False
+
+        except Exception as e:
+            print(f"❌ Webhook Connection Error: {e}")
+            return False

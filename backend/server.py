@@ -6,6 +6,7 @@ from flask_cors import CORS
 from features.sku_printing import process_order_file
 from features.blog_wrapper import start_blog_automation
 from features.keyword_wrapper import process_keyword_file
+from features.blog_posting.core.generate_blog import search_trending_topics
 
 app = Flask(__name__)
 CORS(app)
@@ -42,6 +43,14 @@ def blog_route():
     # Call the wrapper
     result = start_blog_automation(title, desc, platforms)
     return jsonify(result)
+
+@app.route('/api/trending/<category>', methods=['GET'])
+def trending_route(category):
+    try:
+        topics = search_trending_topics(category)
+        return jsonify({"success": True, "topics": topics})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 # --- ROUTE 3: KEYWORD GEN ---
 @app.route('/generate-keywords', methods=['POST'])

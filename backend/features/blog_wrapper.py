@@ -28,56 +28,44 @@ async def run_automation_logic(title, description, platforms):
     if not GroqAPI:
         return {"log": ["❌ Error: Core files missing."], "status": "error"}
 
-    # --- DEFAULT / FALLBACK DATA ---
-    # If AI fails, we use this high-quality backup so your demo doesn't break.
-    final_title = f"{title}: The SevenXT Guide"
-    final_content = f"""# {title}
+    # --- KEYWORDS ---
+    keywords = [k.strip() for k in description.split(' ')] if description else [title]
 
-## Introduction
-In the fast-paced world of consumer electronics, **{title}** is essential for a modern setup. At **SEVENXT ELECTRONICS**, we understand that quality components define your experience.
-
-## Why Quality Matters
-Whether you are upgrading your Home Theater or optimizing a Smart Office, using high-grade accessories ensures:
-1. **Durability:** Long-lasting performance.
-2. **Connectivity:** Zero signal loss.
-3. **Safety:** Protection for your expensive devices.
-
-## The SevenXT Advantage
-Our products are engineered to meet the highest standards of performance and reliability.
-
-## Conclusion
-Upgrade your tech ecosystem today with **SEVENXT ELECTRONICS**.
-"""
-    generated_image = "https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1" # Generic Tech Image
+    # --- DATA HOLDER ---
+    final_title = title
+    final_content = ""
+    generated_image = "https://via.placeholder.com/800x400?text=SevenXT+Electronics"
 
     # ================================
-    # STEP 1: GENERATE TEXT (WITH HARD ERROR CATCHING)
+    # STEP 1: GENERATE TEXT
     # ================================
     try:
-        log.append("🤖 AI Agent: Connecting to Groq Cloud...")
+        log.append("🤖 AI Agent: Generating SEO Blog Post...")
         groq = GroqAPI()
         
         if not os.getenv("GROQ_API_KEY"):
             raise Exception("GROQ_API_KEY missing")
 
-        # Attempt Generation
         blog_data = await groq.generate_blog(
             topic=title,
-            keywords=[title, "Electronics", "SevenXT"],
+            keywords=keywords[:5], 
             brand_name="SEVENXT ELECTRONICS",
-            industries=["Consumer Electronics", "Home Theater"]
+            industries=["Consumer Electronics", "Home Theater", "Smart Office","tv accessories","audio devices","phone accessories","mobile cases"]
         )
         
         final_content = blog_data['content']
         final_title = blog_data['title']
+        # Use the AI's better keywords
+        if blog_data.get('keywords'):
+            keywords = blog_data['keywords']
+
         log.append(f"✅ Text Generated: {len(final_content.split())} words.")
 
     except Exception as e:
-        # --- FAILSAFE ACTIVATED ---
-        print(f"⚠️ AI Error detected: {e}")
-        log.append(f"⚠️ AI Server Busy (Groq 500). Switching to Backup Content Generator.")
-        log.append("✅ Content generated via Local Backup.")
-        # We keep the final_content defined above
+        print(f"⚠️ AI Service Error: {e}")
+        log.append(f"⚠️ AI Issue. Using Fallback Content.")
+        final_title = f"{title}: The SevenXT Guide"
+        final_content = f"# {final_title}\n\nRead more at SevenXT Electronics."
 
     # ================================
     # STEP 2: GENERATE IMAGE
@@ -98,45 +86,69 @@ Upgrade your tech ecosystem today with **SEVENXT ELECTRONICS**.
             log.append(f"⚠️ Image search skipped: {img_e}")
     
     # ================================
-    # STEP 3: PREPARE CREDENTIALS
+    # STEP 3: PREPARE CREDENTIALS & PAYLOAD
     # ================================
-    # Capture SEO data for WordPress
+    
+    # Create a short description for Social Media Captions (First 200 chars of content)
+    social_caption = f"{final_title} - \n\n{final_content[:180]}...\n\nRead more: [LINK]\n\n#{keywords[0]} #SevenXT"
+
     seo_payload = {
-        "focus_keyword": title,
-        "meta_description": f"Learn about {title} with SEVENXT ELECTRONICS.",
+        "focus_keyword": keywords[0] if keywords else title,
+        "meta_description": f"Discover everything about {title} with SEVENXT ELECTRONICS.",
         "seo_title": final_title
     }
 
     credentials = {
+        # --- DIRECT API KEYS ---
         "wordpress_url": os.getenv("WORDPRESS_URL"),
         "wordpress_key": os.getenv("WORDPRESS_KEY"),
-        "linkedin_email": os.getenv("LINKEDIN_EMAIL"),
-        "linkedin_pass": os.getenv("LINKEDIN_PASS"),
-        "reddit_user": os.getenv("REDDIT_USER"),
-        "reddit_pass": os.getenv("REDDIT_PASS"),
-        "subreddit": os.getenv("REDDIT_SUBREDDIT", "technology"),
-        "discord_webhook": os.getenv("DISCORD_WEBHOOK"),
+        "devto_api_key": os.getenv("DEVTO_API_KEY"),
+        
+        # --- THE AUTOMATION BRIDGE ---
+        "make_webhook_url": os.getenv("MAKE_WEBHOOK_URL"), # <--- CRITICAL NEW LINE
+        
+        # --- PAYLOAD DATA ---
         "image_url": generated_image,
-        "seo_data": seo_payload
+        "tags": keywords, 
+        "seo_data": seo_payload,
+        "social_caption": social_caption # Pass this for FB/LinkedIn/Insta
     }
 
     # ================================
-    # STEP 4: DISTRIBUTE
+    # STEP 4: PUBLISH
     # ================================
     publisher = MultiPlatformPublisher()
-    
-    for platform in platforms:
-        log.append(f"📡 Connecting to {platform}...")
         
-        # The distribute function will handle the specific logic
-        url = publisher.distribute(platform, final_title, final_content, credentials)
-        
-        if url:
-            log.append(f"   ✅ Success: Published on {platform}")
+    # 1. Publish WordPress FIRST (The Source of Truth)
+    wp_link = None
+    if "WordPress" in platforms:
+        log.append("📡 Publishing to WordPress (Master)...")
+        wp_link = publisher.distribute("wordpress", final_title, final_content, credentials)
+        if wp_link:
+            log.append(f"   ✅ WP Live: {wp_link}")
+            credentials['wordpress_link_output'] = wp_link 
         else:
-            log.append(f"   ⚠️ Skipped/Failed: {platform}")
+            log.append("   ❌ WP Failed. Social posts will use Homepage URL.")
+            credentials['wordpress_link_output'] = os.getenv("WORDPRESS_URL") # Fallback
         
-        await asyncio.sleep(1)
+    # 2. Publish Others (Dev.to = API, Rest = Make.com)
+    for platform in platforms:
+        if platform == "WordPress": continue 
+            
+        log.append(f"📡 Routing to {platform}...")
+        
+        # The distribute function now handles the switch to Make
+        url = publisher.distribute(platform, final_title, final_content, credentials)
+            
+        if url: 
+            if "make.com" in str(url):
+                log.append(f"   ✅ Sent to Make Automation: {platform}")
+            else:
+                log.append(f"   ✅ Published: {platform}")
+        else: 
+            log.append(f"   ⚠️ Failed: {platform}")
+            
+        await asyncio.sleep(1) # Slight delay to prevent rate limits
 
     log.append("🏁 Campaign Finished.")
     
@@ -145,9 +157,8 @@ Upgrade your tech ecosystem today with **SEVENXT ELECTRONICS**.
         "status": "success",
         "preview": {
             "title": final_title,
-            "content": final_content,
             "image": generated_image,
-            "word_count": len(final_content.split())
+            "link": wp_link
         }
     }
 
