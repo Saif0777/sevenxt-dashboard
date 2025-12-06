@@ -3,7 +3,7 @@ import DashboardLayout from './layout/DashboardLayout';
 import BlogPosting from './pages/BlogPosting';
 import KeywordGen from './pages/KeywordGen';
 import SKUPrinting from './pages/SKUPrinting';
-import ImageGen from './pages/ImageGen';
+
 
 function App() {
   const [activeTab, setActiveTab] = useState('blog');
@@ -13,7 +13,6 @@ function App() {
       case 'blog': return <BlogPosting />;
       case 'keyword': return <KeywordGen />;
       case 'sku': return <SKUPrinting />;
-      case 'image': return <ImageGen />;
       default: return <BlogPosting />;
     }
   };
@@ -24,4 +23,5 @@ function App() {
     </DashboardLayout>
   );
 }
+
 export default App;

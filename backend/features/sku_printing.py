@@ -2,145 +2,162 @@ import os
 import glob
 import pandas as pd
 import time
-import win32api
 import win32print
+import subprocess
+import pyautogui
+import win32gui
+import win32con
+import re
+from datetime import datetime
 
-# --- Helper Functions ---
+# --- 1. HYPER-STRICT SEARCH LOGIC ---
 def find_label_file(sku, label_folder_absolute):
     """
-    Searches for a .lbl file that contains the SKU in its name.
-    Returns: Absolute path (for Printer), Filename (for UI)
+    Finds the label ONLY if the exact Input SKU exists as a whole word.
+    NO prefix stripping. NO partial matching.
     """
-    # 1. Sanitization: Remove special chars from SKU to ensure valid search
-    clean_sku = str(sku).strip()
-    if not clean_sku:
+    target_sku = str(sku).strip()
+    if not target_sku: return None, None
+    
+    # Escape characters (e.g., dots or brackets in SKU)
+    # This ensures we search for the literal string "SP-ATP6w"
+    safe_sku = re.escape(target_sku)
+
+    try:
+        all_files = [f for f in os.listdir(label_folder_absolute) if f.lower().endswith(".lbl")]
+    except FileNotFoundError:
         return None, None
 
-    # 2. Search Pattern: Look for any file containing the SKU
-    # Example: If SKU is "ABC", it matches "m-ABC-Remote.lbl"
-    search_pattern = os.path.join(label_folder_absolute, f"*{clean_sku}*.lbl")
-    
-    # 3. Run Search
-    matches = glob.glob(search_pattern)
-    
-    if matches:
-        # Pick the first match
-        full_path = matches[0]
-        filename = os.path.basename(full_path)
-        return full_path, filename
-        
+    # REGEX EXPLANATION:
+    # (?<![a-zA-Z0-9]) -> Lookbehind: Previous char MUST NOT be a letter or number.
+    # safe_sku         -> The EXACT string from Excel (e.g., "SP-ATP6w").
+    # (?![a-zA-Z0-9])  -> Lookahead: Next char MUST NOT be a letter or number.
+    #
+    # This treats "SP-ATP6w" as a single, unbreakable block.
+    pattern = re.compile(r'(?<![a-zA-Z0-9])' + safe_sku + r'(?![a-zA-Z0-9])', re.IGNORECASE)
+
+    for filename in all_files:
+        if pattern.search(filename):
+            return os.path.join(label_folder_absolute, filename), filename
+
     return None, None
 
+def force_window_focus(window_name):
+    def callback(hwnd, _):
+        if win32gui.IsWindowVisible(hwnd):
+            title = win32gui.GetWindowText(hwnd)
+            if window_name.lower() in title.lower():
+                try:
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    win32gui.SetForegroundWindow(hwnd)
+                except: pass
+    win32gui.EnumWindows(callback, None)
+
 def process_order_file(filepath, label_folder_absolute):
-    """
-    Main logic to process the Excel sheet and print Brother Labels (.lbl).
-    """
     log = []
-    processed_files = [] # List of files sent to printer
+    processed_files = []
+    report_data = []
     
-    log.append(f"Processing Manifest: {os.path.basename(filepath)}")
+    log.append(f"Processing: {os.path.basename(filepath)}")
     
-    # 1. Read the file
+    # Read Data
     try:
-        if filepath.endswith('.csv'):
-            df = pd.read_csv(filepath)
-        else:
-            df = pd.read_excel(filepath, engine='openpyxl')
-            
-        # Clean column names (strip whitespace)
+        if filepath.endswith('.csv'): df = pd.read_csv(filepath)
+        else: df = pd.read_excel(filepath, engine='openpyxl')
         df.columns = df.columns.str.strip()
         
+        # Check Headers
+        col_names = [str(c).lower() for c in df.columns]
+        if not any('sku' in c for c in col_names):
+            log.append("⚠️ No headers found. Assuming Col A=SKU, Col B=Qty")
+            if filepath.endswith('.csv'): df = pd.read_csv(filepath, header=None)
+            else: df = pd.read_excel(filepath, engine='openpyxl', header=None)
+            df.rename(columns={0: 'TargetSKU', 1: 'TargetQty'}, inplace=True)
+            
     except Exception as e:
-        return {"log": [f"❌ Error reading Excel file: {str(e)}"], "printed_images": []}
+        return {"log": [f"❌ Error: {str(e)}"], "printed_images": []}
 
-    # 2. Check for required columns (Based on your screenshot: 'Sku', 'Quantity')
-    # We check case-insensitive to be safe
+    # Identify Columns
     cols = [c.lower() for c in df.columns]
-    if 'sku' not in cols or 'quantity' not in cols:
-        log.append("⚠️ Warning: Columns 'Sku' or 'Quantity' not found exactly.")
-        log.append(f"   Found columns: {list(df.columns)}")
-        # Try to find best match
-        sku_col = next((c for c in df.columns if 'sku' in c.lower()), None)
-        qty_col = next((c for c in df.columns if 'qty' in c.lower() or 'quantity' in c.lower()), None)
-        
-        if not sku_col or not qty_col:
-             return {"log": ["❌ FATAL: Could not identify SKU and Quantity columns."], "printed_images": []}
-    else:
-        sku_col = next(c for c in df.columns if c.lower() == 'sku')
-        qty_col = next(c for c in df.columns if c.lower() == 'quantity')
+    sku_col = next((c for c in df.columns if 'sku' in c.lower()), None)
+    qty_col = next((c for c in df.columns if 'qty' in c.lower() or 'quantity' in c.lower()), None)
+    
+    if not sku_col or not qty_col:
+         return {"log": ["❌ FATAL: Columns Missing."], "printed_images": []}
 
-    # 3. Connect to Printer
-    try:
-        default_printer = win32print.GetDefaultPrinter()
-        log.append(f"🖨️ Target: {default_printer}") # Removed specific brand name
-        
-        # Check if it looks like a Zebra (Optional Polish)
-        if "ZDesigner" in default_printer or "Zebra" in default_printer:
-             log.append("   ✅ Detected Zebra Printer Driver")
-        else:
-             log.append(f"   ⚠️ Warning: Default printer '{default_printer}' might not be the Label Printer.")
-             
-    except:
-        log.append("❌ FATAL: No Default Printer Found.")
-        return {"log": log, "printed_images": []}
+    # --- PATH TO ZEBRA ---
+    zebra_exe = r"C:\Program Files (x86)\Zebra Technologies\ZebraDesigner 2\bin\Design.exe"
 
-    # 4. Loop through rows
-    items_printed = 0
+    items_processed = 0
     
     for index, row in df.iterrows():
         sku = str(row[sku_col]).strip()
-        
-        try:
-            qty = int(row[qty_col])
-        except:
-            continue
-
+        try: qty = int(row[qty_col])
+        except: qty = 0
+            
         if qty <= 0: continue
 
-        # Find the .lbl file
+        # --- STRICT SEARCH CALL ---
         abs_path, filename = find_label_file(sku, label_folder_absolute)
         
         if abs_path:
-            log.append(f"✅ Match: {filename}")
-            
-            # Printing Logic
-            try:
-                # Simulate or Print
-                win32api.ShellExecute(0, "print", abs_path, None, ".", 0)
-                time.sleep(0.5) 
-            except Exception as e:
-                error_msg = str(e)
-                if "no application is associated" in error_msg or "31" in error_msg:
-                    log.append(f"   ⚠️ Dev Mode: Simulated print for {sku}")
-                else:
-                    log.append(f"   ⚠️ Print Error: {error_msg}")
-
-            # UPDATED: We now append "|{qty}" to the string so frontend can read it
+            log.append(f"✅ Match: {sku} -> {filename}")
             processed_files.append(f"FILE_ICON:{filename}|{qty}")
-            items_printed += 1
+            items_processed += 1
             
+            report_data.append({
+                "SKU Input": sku,
+                "Label File": filename,
+                "Quantity": qty,
+                "Status": "PRINTED",
+                "Time": datetime.now().strftime("%H:%M:%S")
+            })
+
+            try:
+                # Printing Workflow
+                subprocess.Popen([zebra_exe, abs_path])
+                time.sleep(12) 
+                force_window_focus("ZebraDesigner")
+                time.sleep(1)
+                pyautogui.hotkey('ctrl', 'p')
+                time.sleep(2)
+                pyautogui.typewrite(str(qty))
+                time.sleep(0.5)
+                pyautogui.press('enter')
+                time.sleep(0.5)
+                pyautogui.hotkey('alt', 'p') 
+                time.sleep(8)
+                os.system("taskkill /f /im Design.exe")
+                time.sleep(2)
+
+            except Exception as e:
+                log.append(f"   ⚠️ Error: {str(e)}")
+                report_data[-1]["Status"] = "ERROR"
         else:
-            # Retry Logic (Removing "SP-")
-            if "SP-" in sku:
-                short_sku = sku.replace("SP-", "")
-                abs_path_retry, filename_retry = find_label_file(short_sku, label_folder_absolute)
-                if abs_path_retry:
-                    log.append(f"✅ Fuzzy Match: {filename_retry}")
-                    # UPDATED: Append Quantity here too
-                    processed_files.append(f"FILE_ICON:{filename_retry}|{qty}")
-                    
-                    try:
-                        win32api.ShellExecute(0, "print", abs_path_retry, None, ".", 0)
-                        time.sleep(0.5)
-                    except:
-                        pass
-                    items_printed += 1
-                else:
-                    log.append(f"   ❌ MISSING: {sku}")
-            else:
-                log.append(f"   ❌ MISSING: {sku}")
+            # STRICT FAIL - If exact SKU string isn't found, fail.
+            log.append(f"   ❌ SKU NOT FOUND: {sku}")
+            report_data.append({
+                "SKU Input": sku,
+                "Label File": "NOT FOUND",
+                "Quantity": qty,
+                "Status": "MISSING",
+                "Time": datetime.now().strftime("%H:%M:%S")
+            })
 
     log.append(f"{'='*30}")
-    log.append(f"🏁 processed {items_printed} SKUs.")
+    log.append(f"🏁 Processed {items_processed} rows.")
+    
+    # Report Generation
+    try:
+        downloads_path = os.path.join(os.path.expanduser("~"), "Downloads")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        report_name = f"Print_Report_{timestamp}.xlsx"
+        full_save_path = os.path.join(downloads_path, report_name)
+        df_report = pd.DataFrame(report_data)
+        df_report.to_excel(full_save_path, index=False)
+        log.append(f"📄 Report saved to Downloads")
+        os.startfile(full_save_path)
+    except Exception as e:
+        log.append(f"⚠️ Report Error: {str(e)}")
     
     return {"log": log, "printed_images": processed_files}

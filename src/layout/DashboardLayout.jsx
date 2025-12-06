@@ -1,22 +1,21 @@
 import React, { useState } from 'react';
-import { BookOpen, Printer, Search, Image as ImageIcon, Menu, ChevronRight, LogOut, ShieldCheck } from 'lucide-react';
-// Import the logo
+import { BookOpen, Printer, Search, Menu, ChevronRight, LogOut, ShieldCheck } from 'lucide-react';
 import logoAsset from '../assets/logo.jpg'; 
 
 const DashboardLayout = ({ activeTab, setActiveTab, children }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const menuItems = [
-    { id: 'blog', label: 'Blog Automation', icon: <BookOpen size={20} />, desc: 'Content & Publishing' },
-    { id: 'keyword', label: 'Keyword Intelligence', icon: <Search size={20} />, desc: 'Amazon Analysis' },
+    { id: 'blog', label: 'Amazon Blog Engine', icon: <BookOpen size={20} />, desc: 'Product to Post' },
+    { id: 'keyword', label: 'SEO Link Generator', icon: <Search size={20} />, desc: 'ASIN & Keywords' },
     { id: 'sku', label: 'SKU Print Ops', icon: <Printer size={20} />, desc: 'Label Management' },
-    { id: 'image', label: 'Image Automation', icon: <ImageIcon size={20} />, desc: 'Product Visuals' },
+    // REMOVED IMAGE AUTOMATION HERE
   ];
 
   return (
     <div className="flex h-screen bg-[#F2F4F7] text-slate-900 font-sans selection:bg-brand-100 selection:text-brand-900">
       
-      {/* Sidebar - Dark Mode for Professional Contrast */}
+      {/* Sidebar */}
       <aside className={`${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 w-80 bg-dark-900 text-slate-300 shadow-2xl fixed md:relative z-50 h-full transition-transform duration-300 ease-in-out flex flex-col border-r border-dark-800`}>
         
         {/* Brand Header */}
@@ -30,7 +29,6 @@ const DashboardLayout = ({ activeTab, setActiveTab, children }) => {
                <span className="text-[10px] font-bold text-brand-600 uppercase tracking-widest">Electronics</span>
             </div>
           </div>
-          {/* Full Legal Name (Subtle) */}
           <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide border-t border-dark-700 pt-3 mt-1">
             SevenXT Electronics Pvt Ltd
           </p>
@@ -65,7 +63,7 @@ const DashboardLayout = ({ activeTab, setActiveTab, children }) => {
           })}
         </nav>
 
-        {/* Footer User Profile */}
+        {/* Footer */}
         <div className="p-4 border-t border-dark-800 bg-dark-950/30">
           <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-dark-800 transition-colors cursor-pointer group border border-transparent hover:border-dark-700">
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-600 to-brand-800 flex items-center justify-center text-white font-bold font-heading border-2 border-dark-700 group-hover:border-brand-500 transition-all">
@@ -99,10 +97,10 @@ const DashboardLayout = ({ activeTab, setActiveTab, children }) => {
             </div>
           </div>
           <div className="flex items-center gap-6">
-             <div className="text-right hidden md:block">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Session</p>
-                <p className="text-xs font-medium text-slate-700">admin@sevenxt.com</p>
-             </div>
+              <div className="text-right hidden md:block">
+                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Session</p>
+                 <p className="text-xs font-medium text-slate-700">admin@sevenxt.com</p>
+              </div>
           </div>
         </header>
 

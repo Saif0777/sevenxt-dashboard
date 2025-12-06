@@ -29,6 +29,10 @@ backend/__pycache__/
 backend/*.pyc
 backend/.env
 *.env
+backend/features/__pycache__/
+backend/features/blog_posting/__pycache__/
+backend/features/keyword_gen/__pycache__/
+backend/features/core/__pycache__/
 
 # --- Hardware ---
 backend/static/labels/*.lbl

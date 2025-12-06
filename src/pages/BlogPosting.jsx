@@ -1,221 +1,185 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, CheckCircle2, Globe, Terminal, Loader2, PenTool, TrendingUp, Sparkles, RefreshCw } from 'lucide-react';
-import axios from 'axios';
+import { Send, CheckCircle2, Globe, Loader2, ShoppingBag, ArrowRight } from 'lucide-react';
+import api from '../services/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-const platformsList = ["WordPress", "Reddit", "Dev.to",'Pinterest', 'Medium', 'Facebook Page', 'Instagram'];
+const platformsList = ["WordPress", "Reddit", "Dev.to", 'Pinterest', 'Medium', 'Facebook Page'];
 
 const BlogPosting = () => {
-  const [formData, setFormData] = useState({ title: '', desc: '' });
-  const [trendingTopics, setTrendingTopics] = useState([]);
-  const [loadingTrends, setLoadingTrends] = useState(false);
+  const [amazonUrl, setAmazonUrl] = useState('');
+  const [productData, setProductData] = useState(null);
+  const [loadingProduct, setLoadingProduct] = useState(false);
+  
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [status, setStatus] = useState('idle'); 
   const [logs, setLogs] = useState([]);
   const [preview, setPreview] = useState(null);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false); // Added missing state for "Read More"
   const logsEndRef = useRef(null);
 
-  useEffect(() => { 
-    if (status === 'processing') logsEndRef.current?.scrollIntoView({ behavior: "smooth" }); 
-  }, [logs, status]);
+  useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
 
-  // FETCH TRENDS FUNCTION
-  const fetchTrends = async () => {
-    setLoadingTrends(true);
+  const handleToggle = (p) => setSelectedPlatforms(prev => prev.includes(p) ? prev.filter(i => i !== p) : [...prev, p]);
+
+  // Fetch Amazon Data
+  const fetchProduct = async () => {
+    if(!amazonUrl) return;
+    setLoadingProduct(true);
+    setProductData(null);
     try {
-        // Default to 'Electronics' if input is empty
-        const category = formData.title || "Electronics"; 
-        // We use the backend endpoint we created in generate_blog.py
-        // Note: You need to ensure your server.py exposes this endpoint
-        // If not, we can mock it or call the function directly via a new route.
-        // For now, let's assume the endpoint exists or we fallback.
-        
-        // HACK: Since we didn't explicitly add a /trending route in server.py yet,
-        // let's quickly add it or assume it exists. 
-        // If you haven't added it, check the "server.py" Update below.
-        const response = await axios.get(`http://localhost:5000/api/trending/${category}`);
-        
-        if (response.data.success) {
-            setTrendingTopics(response.data.topics);
+        const res = await api.post('/api/amazon-details', { url: amazonUrl });
+        if(res.data.error) {
+            alert(res.data.error);
+        } else {
+            setProductData(res.data);
         }
     } catch (e) {
-        console.error("Trend Fetch Error", e);
-        // Fallback for demo
-        setTrendingTopics(["Wireless Chargers", "GaN Adapters", "Mechanical Keyboards", "Smart Home Hubs"]);
+        alert("Failed to fetch product. Check backend.");
     } finally {
-        setLoadingTrends(false);
+        setLoadingProduct(false);
     }
   };
 
-  const handleToggle = (p) => {
-    setSelectedPlatforms(prev => prev.includes(p) ? prev.filter(i => i !== p) : [...prev, p]);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.title || selectedPlatforms.length === 0) return;
-    
+  const handleSubmit = async () => {
+    if (!productData || selectedPlatforms.length === 0) return;
     setStatus('processing');
-    setPreview(null); 
-    setIsExpanded(false);
-    setLogs(["Initializing SevenXT Automation...", "Fetching Real-Time Data..."]);
+    setPreview(null);
+    setLogs(["🚀 Starting Amazon Product Automation..."]);
 
     try {
-      const response = await axios.post('http://localhost:5000/publish-blog', {
-        title: formData.title,
-        desc: formData.desc,
+      const response = await api.post('/publish-blog', {
+        title: productData.title, 
+        desc: productData.description, 
+        product_image: productData.image_url, 
+        product_link: amazonUrl, 
+        brand: productData.brand, // Pass the scraped brand
         platforms: selectedPlatforms
       });
       
       if(response.data.log) setLogs(prev => [...prev, ...response.data.log]);
-      
       if(response.data.status === 'success') {
          setStatus('success');
-         if (response.data.preview) setPreview(response.data.preview);
+         setPreview(response.data.preview);
       } else {
          setStatus('error');
       }
     } catch (err) {
-      setLogs(prev => [...prev, "❌ Connection Error."]);
+      setLogs(prev => [...prev, "❌ Error connecting to server."]);
       setStatus('error');
     }
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 pb-20 font-sans">
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 pb-20 p-6 max-w-7xl mx-auto">
       
-      {/* LEFT COLUMN */}
+      {/* LEFT: INPUTS */}
       <div className="xl:col-span-7 flex flex-col gap-6">
-        
-        {/* Input Form */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white">
-            <div className="flex items-center gap-3">
-                <div className="p-2 bg-brand-50 rounded-lg text-brand-600">
-                    <PenTool size={20}/>
-                </div>
-                <div>
-                    <h3 className="text-lg font-heading font-bold text-slate-900">Content Studio</h3>
-                    <p className="text-xs text-slate-500">AI-Powered Generation</p>
-                </div>
-            </div>
-            {/* Trend Button */}
-            <button 
-                onClick={fetchTrends}
-                className="text-xs flex items-center gap-2 bg-slate-50 hover:bg-brand-50 text-slate-600 hover:text-brand-600 px-3 py-1.5 rounded-full border border-slate-200 transition-all"
-            >
-                {loadingTrends ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}
-                {loadingTrends ? "Analyzing..." : "Suggest Trends"}
-            </button>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-6 bg-slate-900 text-white flex items-center gap-3">
+             <ShoppingBag className="text-brand-500" />
+             <h3 className="font-bold">Amazon Product Input</h3>
           </div>
 
-          <div className="p-6 space-y-6">
-            
-            {/* Trending Chips */}
-            {trendingTopics.length > 0 && (
-                <div className="flex flex-wrap gap-2 animate-fadeIn">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-2 flex items-center"><TrendingUp size={12} className="mr-1"/> Trending:</span>
-                    {trendingTopics.map((topic, i) => (
-                        <button 
-                            key={i}
-                            onClick={() => setFormData({...formData, title: topic})}
-                            className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded-md hover:bg-green-100 transition-colors"
-                        >
-                            {topic}
-                        </button>
-                    ))}
+          <div className="p-6 space-y-4">
+            <label className="block text-xs font-bold text-slate-500 uppercase">Paste Amazon Product Link</label>
+            <div className="flex gap-2">
+                <input 
+                    type="text" 
+                    value={amazonUrl}
+                    onChange={(e) => setAmazonUrl(e.target.value)}
+                    placeholder="https://www.amazon.in/dp/B0..."
+                    className="flex-1 p-3 border border-slate-200 rounded-lg outline-none focus:border-brand-500"
+                />
+                <button onClick={fetchProduct} disabled={loadingProduct} className="bg-slate-800 text-white px-4 rounded-lg font-bold hover:bg-slate-700">
+                    {loadingProduct ? <Loader2 className="animate-spin"/> : <ArrowRight />}
+                </button>
+            </div>
+
+            {/* PRODUCT PREVIEW CARD */}
+            {productData && (
+                <div className="mt-4 p-4 border border-green-200 bg-green-50 rounded-xl flex gap-4 items-start animate-in fade-in slide-in-from-top-2">
+                    <img src={productData.image_url} className="w-20 h-20 object-contain bg-white rounded-md border border-slate-200"/>
+                    <div>
+                        <h4 className="font-bold text-slate-800 text-sm line-clamp-2">{productData.title}</h4>
+                        <p className="text-xs text-slate-500 mt-1 font-mono">ASIN: {productData.asin}</p>
+                        <p className="text-xs text-brand-600 font-bold mt-1">Brand: {productData.brand}</p>
+                        <div className="mt-2 flex gap-2">
+                            <span className="text-[10px] bg-white border px-2 py-1 rounded text-slate-600">Image Loaded ✅</span>
+                            <span className="text-[10px] bg-white border px-2 py-1 rounded text-slate-600">Details Loaded ✅</span>
+                        </div>
+                    </div>
                 </div>
             )}
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Blog Topic</label>
-              <input 
-                type="text" 
-                value={formData.title}
-                onChange={e => setFormData({...formData, title: e.target.value})}
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all font-medium text-slate-900 placeholder:text-slate-400"
-                placeholder="e.g., Electronics"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Context</label>
-              <textarea 
-                rows="5"
-                value={formData.desc}
-                onChange={e => setFormData({...formData, desc: e.target.value})}
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all text-slate-700 placeholder:text-slate-400"
-                placeholder="Optional: Add specific details (e.g. 'Focus on durability and price')..."
-              ></textarea>
-            </div>
           </div>
         </div>
-        
-        {/* Preview Card (Same as before, keeping it concise here) */}
+
+        {/* PREVIEW CARD (This is where the error likely was) */}
         {preview && (
-            <div className="bg-white rounded-xl shadow-xl border border-brand-100 overflow-hidden animate-fadeIn">
-                 {/* ... (Preview content logic stays the same as previous working version) ... */}
-                 <div className="bg-brand-600 p-4 text-white flex justify-between items-center">
-                    <h3 className="font-heading font-bold flex items-center gap-2"><CheckCircle2 size={18}/> Content Ready</h3>
-                 </div>
-                 <div className="w-full h-64 bg-slate-100 relative">
-                    <img src={preview.image} className="w-full h-full object-cover"/>
-                 </div>
-                 <div className="p-6">
-                    <h1 className="text-2xl font-bold mb-4">{preview.title}</h1>
-                    <div className={`prose text-slate-600 ${isExpanded ? '' : 'max-h-[150px] overflow-hidden'}`}>
-                        {preview.content}
+            <div className="bg-white rounded-xl shadow-xl border border-brand-100 overflow-hidden">
+                  <div className="bg-brand-600 p-4 text-white flex justify-between items-center">
+                    <h3 className="font-bold flex items-center gap-2"><CheckCircle2 size={18}/> Published</h3>
+                    {preview.link && preview.link !== "#" && (
+                        <a href={preview.link} target="_blank" rel="noreferrer" className="text-xs bg-white/20 px-3 py-1 rounded-full hover:bg-white/30 flex items-center gap-1 font-bold">
+                            View Live Post <ArrowRight size={12}/>
+                        </a>
+                    )}
+                  </div>
+                  <div className="w-full h-64 bg-slate-100 relative group overflow-hidden">
+                    <img src={preview.image} className="w-full h-full object-cover transition-transform group-hover:scale-105"/>
+                  </div>
+                  <div className="p-6">
+                    <h1 className="text-2xl font-bold mb-4 text-slate-800">{preview.title}</h1>
+                    
+                    {/* --- FIXED MARKDOWN RENDERER --- */}
+                    <div className={`prose prose-slate max-w-none text-slate-600 ${isExpanded ? '' : 'max-h-[300px] overflow-hidden relative'}`}>
+                        <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                                p: ({node, ...props}) => <p className="mb-4 leading-relaxed" {...props} />,
+                                h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-6 mb-2" {...props} />,
+                                h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-5 mb-2" {...props} />,
+                                li: ({node, ...props}) => <li className="ml-4 list-disc" {...props} />
+                            }}
+                        >
+                            {preview.content}
+                        </ReactMarkdown>
+                        {!isExpanded && <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-white to-transparent"></div>}
                     </div>
-                    <button onClick={() => setIsExpanded(!isExpanded)} className="mt-4 text-brand-600 font-bold text-sm">
-                        {isExpanded ? "Show Less" : "Read Full Article"}
+                    
+                    <button onClick={() => setIsExpanded(!isExpanded)} className="mt-4 text-brand-600 font-bold text-sm w-full text-center uppercase hover:underline">
+                        {isExpanded ? "Collapse" : "Read Full Article"}
                     </button>
-                 </div>
+                  </div>
             </div>
         )}
+
+        {/* LOGS */}
+        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-4 h-[250px] overflow-y-auto font-mono text-xs text-slate-300">
+            {logs.map((l,i) => <div key={i} className="mb-1 border-l-2 border-brand-500 pl-2">{l}</div>)}
+            <div ref={logsEndRef}/>
+        </div>
       </div>
 
-      {/* RIGHT COLUMN (Same as before) */}
+      {/* RIGHT: PLATFORMS */}
       <div className="xl:col-span-5 flex flex-col gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full max-h-[600px]">
-          {/* ... (Platform Selector Code) ... */}
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Globe className="text-brand-600" size={20}/> Channels
-            </h3>
-          </div>
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto custom-scrollbar flex-1">
-              {platformsList.map(p => (
-                <div key={p} onClick={() => handleToggle(p)}
-                  className={`p-3 rounded-lg border cursor-pointer flex items-center justify-between transition-all ${selectedPlatforms.includes(p) ? 'bg-brand-50 border-brand-600' : 'hover:bg-slate-50'}`}
-                >
-                  <span className="text-sm font-medium">{p}</span>
-                  {selectedPlatforms.includes(p) && <CheckCircle2 size={16} className="text-brand-600" />}
-                </div>
-              ))}
-          </div>
-          <div className="p-6 border-t border-slate-100 bg-slate-50">
-            <button 
-              onClick={handleSubmit}
-              disabled={status === 'processing' || !formData.title || selectedPlatforms.length === 0}
-              className="w-full py-4 rounded-xl font-heading font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-lg transition-all flex items-center justify-center gap-3 disabled:bg-slate-300"
-            >
-              {status === 'processing' ? <><Loader2 className="animate-spin"/> Automating...</> : <><Send size={18}/> Launch Campaign</>}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h3 className="font-bold mb-4">Distribute To</h3>
+            <div className="space-y-2">
+                {platformsList.map(p => (
+                    <div key={p} onClick={() => handleToggle(p)} className={`p-3 rounded-lg border cursor-pointer flex justify-between items-center transition-all ${selectedPlatforms.includes(p) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'hover:bg-slate-50'}`}>
+                        <span className="text-sm font-bold text-slate-700">{p}</span>
+                        {selectedPlatforms.includes(p) && <CheckCircle2 size={16} className="text-brand-600"/>}
+                    </div>
+                ))}
+            </div>
+            <button onClick={handleSubmit} disabled={!productData || status === 'processing'} className="w-full mt-6 py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-lg disabled:bg-slate-300 transition-all flex justify-center items-center gap-2">
+                {status === 'processing' ? <Loader2 className="animate-spin"/> : <Send size={18}/>}
+                {status === 'processing' ? "Automating..." : "Launch Campaign"}
             </button>
-          </div>
-        </div>
-        
-        {/* Logs (Same as before) */}
-        <div className="bg-dark-900 rounded-xl shadow-lg border border-dark-800 overflow-hidden flex flex-col h-[300px]">
-           <div className="bg-black px-4 py-3 border-b border-dark-800">
-             <span className="text-xs font-mono font-bold text-slate-400">SYSTEM LOGS</span>
-           </div>
-           <div className="p-4 overflow-y-auto font-mono text-xs space-y-2 flex-1 custom-scrollbar text-slate-300">
-             {logs.map((log, i) => (
-               <div key={i} className="border-l-2 border-slate-700 pl-2">{log}</div>
-             ))}
-             <div ref={logsEndRef} />
-           </div>
         </div>
       </div>
+
     </div>
   );
 };

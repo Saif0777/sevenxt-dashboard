@@ -1,0 +1,40 @@
+# --- Core Web Server (CRITICAL) ---
+Flask==3.0.0
+flask-cors==4.0.0
+requests==2.31.0
+python-dotenv==1.0.0
+
+# --- Data & Excel (Required for SKU) ---
+pandas
+openpyxl
+numpy
+
+# --- System & Printer (Required for ZDesigner) ---
+pywin32
+
+# --- Text Processing (Required for Blog) ---
+markdown
+
+# --- Image Processing (Required for Logos/Basic Ops) ---
+pillow
+
+# --- Dependencies from your list (Kept for safety) ---
+contourpy
+cycler
+fonttools
+joblib
+kiwisolver
+matplotlib
+packaging
+pyparsing
+python-dateutil
+pytz
+scikit-learn
+scipy
+six
+threadpoolctl
+tzdata
+fake-useragent
+tenacity
+undetected-chromedriver
+beautifulsoup4
