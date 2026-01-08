@@ -1,114 +1,122 @@
 import requests
 import re
+import os
 import json
-import random
-import time
+import urllib.parse
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
+current_file_path = os.path.abspath(__file__)
+features_dir = os.path.dirname(current_file_path)
+backend_dir = os.path.dirname(features_dir)
+env_path = os.path.join(backend_dir, '.env')
+load_dotenv(dotenv_path=env_path)
 
 def extract_asin(url):
     """Extracts ASIN (B0...) from any Amazon URL"""
-    # Matches /dp/ASIN, /gp/product/ASIN, etc.
     regex = r"(?:/dp/|/gp/product/)([A-Z0-9]{10})"
     match = re.search(regex, url)
-    if match:
-        return match.group(1)
+    if match: return match.group(1)
     return None
 
 def get_product_details(amazon_url):
     """
-    Robust Amazon Scraper with Robot-Check Detection
+    ROBUST VERSION: Uses Scrape.do Proxy API + BeautifulSoup Parsing.
     """
+    api_token = os.getenv("SCRAPE_DO_TOKEN")
+    if not api_token:
+        return {"error": "Critical: SCRAPE_DO_TOKEN missing in .env"}
+
     asin = extract_asin(amazon_url)
-    if not asin:
-        return {"error": "Invalid Amazon Link. Could not find ASIN."}
+    if not asin: return {"error": "Invalid Amazon Link."}
 
-    url = f"https://www.amazon.in/dp/{asin}"
-
-    # ROTATING HEADERS (Crucial for bypassing blocks)
-    user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0'
-    ]
-
-    headers = {
-        'User-Agent': random.choice(user_agents),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.google.com/',
-        'Upgrade-Insecure-Requests': '1',
-    }
+    print(f"📡 Fetching Amazon Page for ASIN: {asin} via Scrape.do...")
 
     try:
-        # Add a small random delay to look human
-        time.sleep(random.uniform(1, 2))
+        # 1. Construct Scrape.do URL
+        # We target the clean DP link to minimize noise
+        target_url = f"https://www.amazon.in/dp/{asin}"
+        encoded_url = urllib.parse.quote(target_url)
         
-        response = requests.get(url, headers=headers, timeout=10)
+        # Scrape.do API Endpoint
+        # render=false (Cheaper, 1 credit) usually works for Amazon product text
+        proxy_url = f"http://api.scrape.do?token={api_token}&url={encoded_url}"
+
+        response = requests.get(proxy_url, timeout=60)
         
-        # Check for Robot/Captcha Page
-        if "api-services-support@amazon.com" in response.text or "Type the characters you see in this image" in response.text:
-            return {"error": "Amazon detected a bot. Try again in 1 minute."}
+        if response.status_code != 200:
+            return {"error": f"Scrape.do Failed: {response.status_code} - {response.text[:100]}"}
 
-        soup = BeautifulSoup(response.content, "html.parser")
+        # 2. Parse HTML with BeautifulSoup
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        # 1. EXTRACT TITLE
+        # --- DATA EXTRACTION LOGIC ---
+
+        # A. Title
         title_tag = soup.find("span", {"id": "productTitle"})
-        title = title_tag.get_text().strip() if title_tag else ""
-        
-        if not title:
-            # Fallback for meta title
-            meta_title = soup.find("meta", {"name": "title"})
-            title = meta_title['content'] if meta_title else f"Amazon Product {asin}"
+        title = title_tag.get_text().strip() if title_tag else f"Amazon Product {asin}"
 
-        # 2. EXTRACT BRAND (New Logic)
-        # Tries to find "Visit the Brand Store" or similar text
-        brand = "SEVENXT" # Default
-        by_line = soup.find("a", {"id": "bylineInfo"})
-        if by_line:
-            brand_text = by_line.get_text().replace("Visit the", "").replace("Store", "").strip()
-            if brand_text: brand = brand_text
+        # B. Brand
+        brand = "SEVENXT"
+        byline = soup.find("a", {"id": "bylineInfo"})
+        if byline:
+            # Usually says "Visit the Sony Store"
+            text = byline.get_text().replace("Visit the", "").replace("Store", "").strip()
+            if text: brand = text
 
-        # 3. EXTRACT IMAGE (High Res)
-        img_url = "https://via.placeholder.com/800" # Fallback
+        # C. HD Image (The Hard Part)
+        # Amazon hides Hi-Res images in a JSON object inside a script tag
+        img_url = "https://via.placeholder.com/800"
         
-        # Method A: Dynamic JSON
+        # Method 1: Dynamic Image Data (Best Quality)
         img_div = soup.find("div", {"id": "imgTagWrapperId"})
-        if img_div and img_div.find("img"):
+        if img_div:
             img_tag = img_div.find("img")
-            if 'data-a-dynamic-image' in img_tag.attrs:
+            if img_tag and 'data-a-dynamic-image' in img_tag.attrs:
                 try:
-                    img_dict = json.loads(img_tag['data-a-dynamic-image'])
-                    # Get the largest image (last key)
-                    img_url = list(img_dict.keys())[-1]
-                except:
-                    img_url = img_tag.get('src')
+                    # It's a JSON dictionary: {"url": [width, height], ...}
+                    img_data = json.loads(img_tag['data-a-dynamic-image'])
+                    # The last key is usually the largest image
+                    img_url = list(img_data.keys())[-1]
+                    print("   ✅ Found HD Image via Dynamic JSON")
+                except: pass
         
-        # Method B: Landing Image ID
+        # Method 2: Landing Image Fallback
         if "placeholder" in img_url:
             landing_img = soup.find("img", {"id": "landingImage"})
             if landing_img:
                 img_url = landing_img.get('src')
+                # Strip resizing code if present (e.g. ._AC_XY200_.jpg)
+                img_url = re.sub(r'\._AC_.*?_\.', '.', img_url)
 
-        # 4. EXTRACT BULLETS
+        # D. Description (Bullet Points)
         bullets = []
-        bullet_div = soup.find("div", {"id": "feature-bullets"})
-        if bullet_div:
-            for li in bullet_div.find_all("li"):
-                txt = li.get_text().strip()
-                if txt and not "show more" in txt.lower():
-                    bullets.append(txt)
+        feature_div = soup.find("div", {"id": "feature-bullets"})
+        if feature_div:
+            for li in feature_div.find_all("li"):
+                # Remove "Show more" buttons or hidden text
+                if "a-declarative" not in li.get('class', []):
+                    text = li.get_text().strip()
+                    if text: bullets.append(text)
         
-        description = " ".join(bullets[:4]) # Top 4 bullets
+        description = " ".join(bullets[:5]) # Top 5 bullets
+        if not description:
+            # Fallback to meta description
+            meta = soup.find("meta", {"name": "description"})
+            if meta: description = meta['content']
+
+        print(f"✅ Data Ready: {title[:20]}... | Image Extracted.")
 
         return {
             "status": "success",
             "asin": asin,
             "title": title,
-            "brand": brand, # Passing brand to frontend
-            "image_url": img_url,
+            "brand": brand,
+            "image_url": img_url, 
             "description": description,
             "seo_url": f"https://www.amazon.in/{title.replace(' ', '-').lower()[:50]}/dp/{asin}"
         }
 
     except Exception as e:
+        print(f"❌ Error: {e}")
         return {"error": str(e)}

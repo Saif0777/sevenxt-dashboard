@@ -1,9 +1,6 @@
 import os
 import httpx
-import requests
-import random
 import json
-import re
 from typing import List
 
 class GroqAPI:
@@ -12,32 +9,51 @@ class GroqAPI:
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
         self.client = httpx.AsyncClient(timeout=120.0)
 
+    def _sanitize_json(self, raw_text):
+        """Clean markdown wrappers"""
+        text = raw_text.replace("```json", "").replace("```", "").strip()
+        return text
+
     async def generate_blog(self, topic, keywords, brand_name, industries, context="", attempt=1):
         if not self.api_key: raise ValueError("GROQ_API_KEY missing")
 
-        # --- PERFECTED SEO PROMPT ---
+        # --- HYPER-STRICT SEO PROMPT ---
         prompt = f"""
-        You are a World-Class SEO Copywriter. 
-        I will give you a product. You must write a Blog Post and generate SEO Metadata in STRICT JSON format.
+        You are a SEO Algorithm Beater. Write a **1500-Word Product Guide** in STRICT JSON format.
 
-        PRODUCT DETAILS:
+        PRODUCT DATA:
         Name: {topic}
-        Context/Specs: {context}
+        Specs: {context}
         Brand: {brand_name}
 
-        CRITICAL SEO RULES (Must Follow Exactly):
-        1. **Focus Keyphrase:** Pick a SHORT, high-volume keyword (Max 3-4 words) derived from the product (e.g., "Sony TV Remote").
-        2. **Introduction Rule:** The Introduction MUST start with the Focus Keyphrase. (Example: "The **Sony TV Remote** is the perfect replacement...")
-        3. **Density Rule:** Use the Focus Keyphrase exactly 4 to 6 times in the entire article. DO NOT overuse it. Use synonyms like "this device", "the controller", "the unit".
-        4. **Heading Rule:** At least 2 Subheadings (H2) MUST contain the Focus Keyphrase exactly.
-        5. **Meta Description:** Must be between 130-155 characters long and include the keyphrase.
+        --- CRITICAL SEO RULES (PASS/FAIL) ---
+        1. **Focus Keyphrase:** Pick a specific 3-4 word keyword (e.g., "{brand_name} TV Remote").
+        2. **Title:** Must START with the Keyphrase. Max 60 chars.
+        3. **Introduction Rule:** The text MUST start exactly with: "The **[Keyphrase]** is the perfect solution for..."
+        4. **Density Rule:** You must use the Keyphrase EXACTLY 5 times in the entire article.
+           - 1x in Intro
+           - 1x in the first H2
+           - 2x in the Body
+           - 1x in Conclusion
+           - STOP using it after 5 times. Use "this device" instead.
+        5. **Subheading Rule:** The first H2 Header MUST be exactly: "Why Choose the [Keyphrase]?"
 
-        OUTPUT FORMAT (Must be valid JSON):
+        --- CONTENT SKELETON (1500 Words) ---
+        1. **Introduction (150 Words):** Hook the reader immediately.
+        2. **Why Choose the [Keyphrase]? (300 Words):** (This H2 satisfies the SEO rule). Explain the main value proposition.
+        3. **Detailed Features (400 Words):** Expand on specs. Explain *why* IR range or button layout matters.
+        4. **Setup Guide (300 Words):** Step-by-step pairing instructions.
+        5. **Comparison vs Generic (200 Words):** Durability, tactility, and brand trust.
+        6. **Conclusion (150 Words):** Final summary.
+
+        OUTPUT JSON STRUCTURE:
         {{
-            "focus_keyphrase": "The short keyword you chose",
-            "seo_title": "A catchy title starting with the keyphrase (Max 60 chars)",
-            "meta_description": "A compelling summary between 130-155 characters including the keyphrase.",
-            "content": "# Blog Title\\n\\n## Introduction\\n[Start with keyphrase]... (Write full 600-word article in Markdown)...\\n\\n## Why choose this [Keyphrase]?\\n..."
+            "focus_keyphrase": "Samsung TV Remote",
+            "seo_title": "Samsung TV Remote: The Ultimate Guide",
+            "meta_description": "Upgrade your setup with the Samsung TV Remote. Features long range and easy setup. (145 chars)",
+            "wp_category": "Electronics",
+            "wp_tags": ["Samsung", "Remote", "Smart TV"],
+            "content": "# Title\\n\\n## Introduction\\n\\nThe [Keyphrase] is... (write full content)..."
         }}
         """
 
@@ -48,48 +64,51 @@ class GroqAPI:
                 json={
                     "model": "llama-3.3-70b-versatile",
                     "messages": [
-                        {"role": "system", "content": "You are a JSON-only response bot. Do not output anything except valid JSON."},
+                        {"role": "system", "content": "You are a strict SEO bot. You follow density rules exactly."},
                         {"role": "user", "content": prompt}
                     ],
-                    "temperature": 0.4 # Lower temperature for stricter adherence to rules
+                    "temperature": 0.1 # Lowest temp for maximum obedience
                 }
             )
-            response.raise_for_status()
             result = response.json()
             raw_content = result["choices"][0]["message"]["content"]
             
-            # --- CLEANUP JSON ---
-            clean_json = raw_content.replace("```json", "").replace("```", "").strip()
-            data = json.loads(clean_json)
+            clean_json = self._sanitize_json(raw_content)
+            
+            try:
+                data = json.loads(clean_json, strict=False)
+            except json.JSONDecodeError:
+                return {
+                    'title': f"Review: {topic}",
+                    'content': raw_content, 
+                    'meta_description': f"Review of {topic}.",
+                    'keywords': ["Tech"],
+                    'focus_keyphrase': "Tech",
+                    'wp_category': "Uncategorized",
+                    'wp_tags': []
+                }
             
             return {
-                'title': data['seo_title'], 
-                'content': data['content'],
-                'meta_description': data['meta_description'],
-                'keywords': [data['focus_keyphrase']],
-                'focus_keyphrase': data['focus_keyphrase']
+                'title': data.get('seo_title', topic), 
+                'content': data.get('content', raw_content),
+                'meta_description': data.get('meta_description', ''),
+                'keywords': [data.get('focus_keyphrase', 'Tech')],
+                'focus_keyphrase': data.get('focus_keyphrase', 'Review'),
+                'wp_category': data.get('wp_category', 'Electronics'),
+                'wp_tags': data.get('wp_tags', [])
             }
 
         except Exception as e:
             print(f"AI Error: {e}")
             return {
                 'title': topic,
-                'content': f"# {topic}\n\nError generating content. Please try again.",
+                'content': f"# {topic}\n\n**Error:** Could not generate content.",
                 'meta_description': "Product review.",
                 'keywords': ["Review"],
-                'focus_keyphrase': "Review"
+                'focus_keyphrase': "Review",
+                'wp_category': "Uncategorized",
+                'wp_tags': []
             }
 
-# --- SEARCH TRENDS (Unchanged) ---
 def search_trending_topics(category: str) -> List[str]:
-    api_key = os.getenv("SERPAPI_API_KEY")
-    if not api_key: return ["Best Smart Remotes", "4K HDMI Cables", "Wall Mount Guide"]
-    try:
-        url = "https://serpapi.com/search.json"
-        params = {"engine": "google_autocomplete", "q": category, "api_key": api_key}
-        response = requests.get(url, params=params, timeout=5)
-        data = response.json()
-        if "suggestions" in data:
-            return [item.get("value") for item in data["suggestions"]][:8]
-        return ["Guide to Electronics", "Best Tech 2025"]
-    except: return ["Review", "Guide"]
+    return ["Guide to Electronics", "Best Tech 2025"]

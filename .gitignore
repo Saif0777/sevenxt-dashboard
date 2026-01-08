@@ -1,4 +1,4 @@
-# Logs
+# --- System & Logs ---
 logs
 *.log
 npm-debug.log*
@@ -6,36 +6,47 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.DS_Store
+Thumbs.db
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# --- Editor Config ---
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# --- Python & Backend ---
+# --- Frontend (Node) ---
+node_modules
+dist
+dist-ssr
+*.local
+
+# --- Backend (Python) ---
 backend/venv/
 backend/__pycache__/
-backend/*.pyc
-backend/.env
-*.env
+*.pyc
 backend/features/__pycache__/
 backend/features/blog_posting/__pycache__/
 backend/features/keyword_gen/__pycache__/
 backend/features/core/__pycache__/
 
-# --- Hardware ---
-backend/static/labels/*.lbl
-backend/temp_post_image.jpg
+# --- Security (CRITICAL) ---
+# Never upload .env files to GitHub
+.env
+backend/.env
+*.env
 
+# --- User Data & Cache (Don't upload these!) ---
+# We ignore the FILES inside these folders, but keep the FOLDERS themselves
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+backend/static/labels/*
+!backend/static/labels/.gitkeep
+
+backend/temp_post_image.jpg
 info.txt

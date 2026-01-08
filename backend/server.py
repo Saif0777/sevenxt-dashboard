@@ -2,6 +2,7 @@ import os
 import mimetypes
 from flask import Flask, request, jsonify, send_file, render_template, send_from_directory
 from flask_cors import CORS
+from functools import wraps  # Import for security decorator
 
 # --- FIX MIME TYPES ---
 mimetypes.add_type('application/javascript', '.js')
@@ -14,7 +15,6 @@ from features.keyword_gen.ai_keywords import get_hybrid_keywords
 from features.blog_posting.core.generate_blog import search_trending_topics
 from features.amazon_details import get_product_details
 
-
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
 
@@ -26,25 +26,64 @@ IMAGE_FOLDER_ABSOLUTE = os.path.join(BASE_DIR, 'static', 'labels')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# --- ROUTE 1: SKU PRINTING ---
+# ---------------------------------------------------------
+# 🔐 SECURITY SYSTEM START
+# ---------------------------------------------------------
+
+# 1. Load Master Password (Default is just a fallback, use ENV in production!)
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "SEVEN-TEAM-2025")
+
+# 2. Authentication Decorator
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Allow OPTIONS requests (Pre-flight checks from browser always happen first)
+        if request.method == 'OPTIONS':
+            return f(*args, **kwargs)
+            
+        # Get password from headers
+        token = request.headers.get('X-Access-Token')
+        
+        # Check match
+        if not token or token != ADMIN_PASSWORD:
+            return jsonify({"error": "⛔ Unauthorized: Invalid Access Code"}), 401
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
+# 3. Login Route (Verifies the code on the frontend)
+@app.route('/api/verify-login', methods=['POST'])
+def verify_login():
+    data = request.json
+    password = data.get('password')
+    if password == ADMIN_PASSWORD:
+        return jsonify({"success": True, "message": "Login Successful"})
+    return jsonify({"success": False, "message": "Invalid Code"}), 401
+
+# ---------------------------------------------------------
+# 🔐 SECURITY SYSTEM END
+# ---------------------------------------------------------
+
+
+# --- ROUTE 1: SKU PRINTING (Protected) ---
 @app.route('/print-sku', methods=['POST']) 
-@app.route('/upload', methods=['POST'])    
+@app.route('/upload', methods=['POST'])
+@require_auth  # <--- LOCKED
 def sku_route():
     if 'file' not in request.files: return jsonify({"error": "No file"}), 400
     file = request.files['file']
     
-    # Save with unique name to avoid "File Open" errors
     import time
     unique_filename = f"{int(time.time())}_{file.filename}"
     filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
     file.save(filepath)
     
-    # Pass the image folder location to the logic
     result = process_order_file(filepath, IMAGE_FOLDER_ABSOLUTE)
     return jsonify(result)
 
-# --- NEW ROUTE: FETCH AMAZON DETAILS ---
+# --- NEW ROUTE: FETCH AMAZON DETAILS (Protected) ---
 @app.route('/api/amazon-details', methods=['POST'])
+@require_auth  # <--- LOCKED
 def get_amazon_details():
     data = request.json
     url = data.get('url')
@@ -53,24 +92,23 @@ def get_amazon_details():
     result = get_product_details(url)
     return jsonify(result)
 
-# --- UPDATED ROUTE: BLOG AUTOMATION ---
+# --- UPDATED ROUTE: BLOG AUTOMATION (Protected) ---
 @app.route('/publish-blog', methods=['POST'])
+@require_auth  # <--- LOCKED
 def blog_route():
     data = request.json
     title = data.get('title')
     desc = data.get('desc')
     platforms = data.get('platforms', [])
-    
-    # NEW: Accept the Amazon Image URL from frontend
     product_image = data.get('product_image') 
     product_link = data.get('product_link')
     brand = data.get('brand', 'SEVENXT')
 
-    # Pass these to the wrapper
     result = start_blog_automation(title, desc, platforms, product_image, product_link, brand)
     return jsonify(result)
 
 @app.route('/api/trending/<category>', methods=['GET'])
+@require_auth  # <--- LOCKED
 def trending_route(category):
     try:
         topics = search_trending_topics(category)
@@ -78,34 +116,37 @@ def trending_route(category):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
-# --- NEW HYBRID ROUTE ---
+# --- ROUTE 4: HYBRID KEYWORD GEN (Protected) ---
 @app.route('/generate-seo-links', methods=['POST'])
+@require_auth  # <--- LOCKED
 def generate_seo_links_route():
     data = request.json
     product = data.get('product')
     asin = data.get('asin')
+    specs = data.get('specs')
     
-    if not product or not asin:
-        return jsonify({"error": "Product Name and ASIN are required"}), 400
-        
-    print(f"🚀 [Hybrid Engine] Analyzing: {product} ({asin})")
+    if not product or not asin or not specs:
+        return jsonify({"error": "Name, ASIN, and Specs are required"}), 400
     
-    # Call the Hybrid Logic
-    results = get_hybrid_keywords(product, asin)
+    result_obj = get_hybrid_keywords(product, asin, specs)
     
-    if not results:
+    if not result_obj or "data" not in result_obj:
         return jsonify({"error": "Failed to generate strategies"}), 500
         
-    return jsonify({"success": True, "data": results})
+    return jsonify({"success": True, "data": result_obj["data"], "download_url": result_obj["file_url"]})
 
+# --- DOWNLOAD ROUTE (Public - Needed for browser download) ---
+@app.route('/download/<filename>', methods=['GET'])
+def download_file(filename):
+    # This remains public so the browser can download the file after generation
+    print(f"📥 [Download Request] Looking for: {filename}")
+    try:
+        return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+    except Exception as e:
+        print(f"❌ Download Error: {e}")
+        return jsonify({"error": "File not found"}), 404
 
-# --- ROUTE 4: IMAGE AUTOMATION (PLACEHOLDER) ---
-@app.route('/image-generator/create', methods=['POST'])
-def image_route():
-    # We return a dummy success so the frontend doesn't crash
-    return jsonify({"status": "coming_soon", "message": "Module disabled for production"})
-
-# --- ROUTE 5: SERVE REACT FRONTEND ---
+# --- ROUTE 5: SERVE REACT FRONTEND (Public) ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -114,7 +155,6 @@ def index():
 def catch_all(path):
     return render_template('index.html')
 
-# --- ROUTE 6: FIX ASSET PATHS ---
 @app.route('/assets/<path:path>')
 def proxy_assets(path):
     return send_from_directory('static/assets', path)

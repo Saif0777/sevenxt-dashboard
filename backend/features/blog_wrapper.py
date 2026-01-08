@@ -58,23 +58,24 @@ async def run_automation_logic(title, description, platforms, forced_image=None,
         log.append("📸 Using Amazon Product Image.")
         generated_image = forced_image
 
-    # 3. Credentials
-    # The 'blog_data' object now contains the SMART SHORT KEYPHRASE from the AI
-    smart_keyword = blog_data['focus_keyphrase']
-    smart_meta = blog_data['meta_description']
-
+    # 3. Credentials & Payload
     creds = {
         "wordpress_url": os.getenv("WORDPRESS_URL"),
         "wordpress_key": os.getenv("WORDPRESS_KEY"),
         "devto_api_key": os.getenv("DEVTO_API_KEY"),
         "make_webhook_url": os.getenv("MAKE_WEBHOOK_URL"),
         "image_url": generated_image,
-        "tags": [smart_keyword, "Tech", "Review"], # Use clean tags
+        
+        # --- NEW DATA PASSED HERE ---
+        "wp_category": blog_data.get('wp_category', 'Electronics'), 
+        "wp_tags": blog_data.get('wp_tags', []), 
+        
+        "tags": blog_data.get('keywords', []), # Fallback for old logic
         "seo_data": {
-            "focus_keyword": smart_keyword,  # <--- This is now "Sony TV Remote" (Short & Green Score)
-            "meta_description": smart_meta
+            "focus_keyword": blog_data['focus_keyphrase'],
+            "meta_description": blog_data['meta_description']
         },
-        "social_caption": f"{smart_meta} #SevenXT #{smart_keyword.replace(' ', '')}",
+        "social_caption": f"{blog_data['meta_description']} #SevenXT",
         "wordpress_link_output": product_link if product_link else os.getenv("WORDPRESS_URL")
     }
 

@@ -15,7 +15,7 @@ const BlogPosting = () => {
   const [status, setStatus] = useState('idle'); 
   const [logs, setLogs] = useState([]);
   const [preview, setPreview] = useState(null);
-  const [isExpanded, setIsExpanded] = useState(false); // Added missing state for "Read More"
+  const [isExpanded, setIsExpanded] = useState(false); 
   const logsEndRef = useRef(null);
 
   useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
@@ -53,7 +53,7 @@ const BlogPosting = () => {
         desc: productData.description, 
         product_image: productData.image_url, 
         product_link: amazonUrl, 
-        brand: productData.brand, // Pass the scraped brand
+        brand: productData.brand, 
         platforms: selectedPlatforms
       });
       
@@ -114,7 +114,7 @@ const BlogPosting = () => {
           </div>
         </div>
 
-        {/* PREVIEW CARD (This is where the error likely was) */}
+        {/* PREVIEW CARD */}
         {preview && (
             <div className="bg-white rounded-xl shadow-xl border border-brand-100 overflow-hidden">
                   <div className="bg-brand-600 p-4 text-white flex justify-between items-center">
@@ -131,15 +131,21 @@ const BlogPosting = () => {
                   <div className="p-6">
                     <h1 className="text-2xl font-bold mb-4 text-slate-800">{preview.title}</h1>
                     
-                    {/* --- FIXED MARKDOWN RENDERER --- */}
-                    <div className={`prose prose-slate max-w-none text-slate-600 ${isExpanded ? '' : 'max-h-[300px] overflow-hidden relative'}`}>
+                    {/* --- FIXED FORMATTING FOR MARKDOWN --- */}
+                    <div className={`prose prose-lg prose-slate max-w-none text-slate-600 ${isExpanded ? '' : 'max-h-[300px] overflow-hidden relative'}`}>
                         <ReactMarkdown 
                             remarkPlugins={[remarkGfm]}
                             components={{
-                                p: ({node, ...props}) => <p className="mb-4 leading-relaxed" {...props} />,
-                                h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-6 mb-2" {...props} />,
-                                h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-5 mb-2" {...props} />,
-                                li: ({node, ...props}) => <li className="ml-4 list-disc" {...props} />
+                                // Spacing for paragraphs
+                                p: ({node, ...props}) => <p className="mb-6 leading-relaxed" {...props} />,
+                                // Headings
+                                h1: ({node, ...props}) => <h1 className="text-3xl font-bold mt-8 mb-4 text-slate-900" {...props} />,
+                                h2: ({node, ...props}) => <h2 className="text-2xl font-bold mt-8 mb-4 text-slate-800 border-b pb-2" {...props} />,
+                                h3: ({node, ...props}) => <h3 className="text-xl font-semibold mt-6 mb-3 text-slate-800" {...props} />,
+                                // Lists
+                                ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-6 space-y-2" {...props} />,
+                                ol: ({node, ...props}) => <ol className="list-decimal pl-6 mb-6 space-y-2" {...props} />,
+                                li: ({node, ...props}) => <li className="pl-1" {...props} />,
                             }}
                         >
                             {preview.content}
@@ -183,4 +189,4 @@ const BlogPosting = () => {
     </div>
   );
 };
-export default BlogPosting;
+export default BlogPosting; 

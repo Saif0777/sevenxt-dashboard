@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloud, FileSpreadsheet, Printer, Terminal, Box, Loader2, FileCode, Check, Layers } from 'lucide-react';
-import axios from 'axios';
+// 1. CHANGE THIS IMPORT
+import api from '../services/api'; 
+
+// Helper to get image URL in both Local & Cloud modes
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const SKUPrinting = () => {
   const [file, setFile] = useState(null);
@@ -20,13 +24,23 @@ const SKUPrinting = () => {
     formData.append('file', file);
 
     try {
-      const response = await axios.post('http://localhost:5000/print-sku', formData);
+      // 2. USE 'api.post' (Secure) instead of 'axios.post'
+      // Remove the domain, just use the endpoint '/print-sku'
+      const response = await api.post('/print-sku', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
       const { log, printed_images } = response.data;
       setLogs(log);
       setPrintedImages(printed_images);
       setStatus('success');
     } catch (error) {
-      setLogs(prev => [...prev, "❌ CONNECTION ERROR: Ensure Backend is running."]);
+      console.error("Print Error:", error);
+      // Better error handling for 401
+      const msg = error.response?.status === 401 
+        ? "⛔ AUTH ERROR: Please Logout and Login again." 
+        : "❌ CONNECTION ERROR: Ensure Backend is running.";
+      setLogs(prev => [...prev, msg]);
       setStatus('error');
     }
   };
@@ -94,13 +108,11 @@ const SKUPrinting = () => {
                     <p className="text-sm font-medium">Queue is empty</p>
                 </div>
             ) : (
-                // UPDATED: Medium Sized Grid (3 Cols)
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 content-start">
                 {printedImages.map((itemStr, idx) => {
-                    // Parse the string "FILE_ICON:filename.lbl|5"
                     const parts = itemStr.split('|');
                     const rawFile = parts[0];
-                    const quantity = parts[1] || '1'; // Default to 1 if missing
+                    const quantity = parts[1] || '1';
                     
                     const isLabel = rawFile.startsWith("FILE_ICON:");
                     const displayName = isLabel ? rawFile.replace("FILE_ICON:", "") : "SKU Image";
@@ -108,18 +120,20 @@ const SKUPrinting = () => {
                     return (
                         <div key={idx} className="group relative bg-white border border-slate-200 rounded-xl p-4 flex flex-col items-center hover:border-brand-300 hover:shadow-md transition-all">
                             
-                            {/* Quantity Badge */}
                             <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-brand-50 text-brand-700 px-2 py-1 rounded-md border border-brand-100">
                                 <Layers size={12} />
                                 <span className="text-xs font-bold">{quantity} Copies</span>
                             </div>
 
-                            {/* Icon */}
                             <div className="w-16 h-16 bg-slate-50 rounded-xl flex items-center justify-center mb-4 text-slate-400 group-hover:text-brand-500 group-hover:bg-brand-50 transition-colors mt-2">
-                                {isLabel ? <FileCode size={32} /> : <img src={`http://localhost:5000/${itemStr}`} className="w-full h-full object-contain" />}
+                                {isLabel ? (
+                                    <FileCode size={32} /> 
+                                ) : (
+                                    // 3. FIXED IMAGE URL FOR PRODUCTION
+                                    <img src={`${API_BASE}/${itemStr}`} className="w-full h-full object-contain" alt="sku" />
+                                )}
                             </div>
                             
-                            {/* Filename */}
                             <div className="w-full text-center px-1">
                                 <p className="text-sm font-bold text-slate-800 truncate w-full" title={displayName}>
                                     {displayName.split('.')[0]}
@@ -129,10 +143,8 @@ const SKUPrinting = () => {
                                 </p>
                             </div>
                             
-                            {/* Index Number */}
                             <div className="absolute top-3 left-3 text-[10px] text-slate-300 font-mono">#{idx + 1}</div>
                             
-                            {/* Sent Status */}
                             <div className="mt-4 w-full flex items-center justify-center gap-1.5 text-[10px] font-bold text-green-600 bg-green-50 py-1.5 rounded-lg">
                                 <Check size={12} strokeWidth={3}/> SENT TO PRINTER
                             </div>
