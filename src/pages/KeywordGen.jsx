@@ -57,13 +57,20 @@ const KeywordGen = () => {
             
             // Auto-Download Excel
             if (response.data.download_url) {
-                const fileUrl = `http://localhost:5000${response.data.download_url}`;
+                const url = response.data.download_url;
+                
+                // 1. Create a hidden <a> tag
                 const link = document.createElement('a');
-                link.href = fileUrl;
-                link.setAttribute('download', `SevenXT_SEO_${asin}.xlsx`);
+                link.href = url;
+                
+                // 2. Set it to download mode
+                link.setAttribute('download', 'Report.xlsx'); // Filename hint
+                link.setAttribute('target', '_blank');       // Open in new tab (safer for files)
+                
+                // 3. Append to body, click, and remove
                 document.body.appendChild(link);
                 link.click();
-                link.parentNode.removeChild(link);
+                document.body.removeChild(link);
             }
         }
     } catch (error) {
