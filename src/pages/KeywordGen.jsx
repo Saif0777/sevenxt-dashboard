@@ -7,11 +7,12 @@ const KeywordGen = () => {
   const [mainProduct, setMainProduct] = useState('');
   const [productSpecs, setProductSpecs] = useState('');
   const [generatedLinks, setGeneratedLinks] = useState([]);
+  const [downloadUrl, setDownloadUrl] = useState(null); // ✅ NEW: Store the URL here
   
   const [loading, setLoading] = useState(false);         // For Keyword Generation
   const [fetchLoading, setFetchLoading] = useState(false); // For Auto-Fill
 
-  // --- NEW: AUTO-FETCH FUNCTION ---
+  // --- AUTO-FETCH FUNCTION ---
   const handleFetchDetails = async () => {
     if (!asin) {
         alert("Please enter an ASIN first.");
@@ -19,18 +20,15 @@ const KeywordGen = () => {
     }
     setFetchLoading(true);
     try {
-        // We reuse the existing Blog Scraper endpoint!
-        // It's robust and uses Scrape.do/SerpApi
         const response = await api.post('/api/amazon-details', {
-            url: `https://www.amazon.in/dp/${asin}` // Construct URL from ASIN
+            url: `https://www.amazon.in/dp/${asin}`
         });
 
         if (response.data.error) {
             alert("Error fetching data: " + response.data.error);
         } else {
-            // Auto-Fill the inputs
             setMainProduct(response.data.title);
-            setProductSpecs(response.data.description); // This contains the Bullet Points
+            setProductSpecs(response.data.description);
         }
     } catch (error) {
         console.error(error);
@@ -44,6 +42,7 @@ const KeywordGen = () => {
     if (!asin || !mainProduct || !productSpecs) return;
     setLoading(true);
     setGeneratedLinks([]);
+    setDownloadUrl(null); // Reset previous download
 
     try {
         const response = await api.post('/generate-seo-links', {
@@ -55,22 +54,9 @@ const KeywordGen = () => {
         if (response.data.success) {
             setGeneratedLinks(response.data.data);
             
-            // Auto-Download Excel
+            // ✅ UPDATED: Save the URL state instead of auto-clicking
             if (response.data.download_url) {
-                const url = response.data.download_url;
-                
-                // 1. Create a hidden <a> tag
-                const link = document.createElement('a');
-                link.href = url;
-                
-                // 2. Set it to download mode
-                link.setAttribute('download', 'Report.xlsx'); // Filename hint
-                link.setAttribute('target', '_blank');       // Open in new tab (safer for files)
-                
-                // 3. Append to body, click, and remove
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                setDownloadUrl(response.data.download_url);
             }
         }
     } catch (error) {
@@ -169,7 +155,32 @@ const KeywordGen = () => {
 
             {/* RIGHT: OUTPUTS */}
             <div className="lg:col-span-8">
-                {/* ... (This section remains exactly the same as before) ... */}
+                
+                {/* ✅ NEW: DOWNLOAD BANNER (Appears when file is ready) */}
+                {downloadUrl && (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex justify-between items-center shadow-sm animate-pulse">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-green-100 rounded-lg">
+                                <FileDown size={24} className="text-green-700" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-green-800">Excel Report Ready</h4>
+                                <p className="text-xs text-green-600">Click to download your campaign file.</p>
+                            </div>
+                        </div>
+                        
+                        <a 
+                            href={downloadUrl}
+                            download="Amazon_SEO_Report.xlsx"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg shadow transition-colors flex items-center gap-2"
+                        >
+                            Download <FileDown size={16} />
+                        </a>
+                    </div>
+                )}
+
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-slate-700 flex items-center gap-2">
                         <Link size={18} className="text-brand-600"/> Generated Campaigns
