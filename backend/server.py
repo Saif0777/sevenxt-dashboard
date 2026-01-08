@@ -116,9 +116,9 @@ def trending_route(category):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
-# --- ROUTE 4: HYBRID KEYWORD GEN (Protected) ---
+# --- ROUTE 4: HYBRID KEYWORD GEN (Fixed for Cloud Downloads) ---
 @app.route('/generate-seo-links', methods=['POST'])
-@require_auth  # <--- LOCKED
+@require_auth
 def generate_seo_links_route():
     data = request.json
     product = data.get('product')
@@ -128,12 +128,36 @@ def generate_seo_links_route():
     if not product or not asin or not specs:
         return jsonify({"error": "Name, ASIN, and Specs are required"}), 400
     
+    # 1. Run the Logic
     result_obj = get_hybrid_keywords(product, asin, specs)
     
     if not result_obj or "data" not in result_obj:
         return jsonify({"error": "Failed to generate strategies"}), 500
-        
-    return jsonify({"success": True, "data": result_obj["data"], "download_url": result_obj["file_url"]})
+
+    # ---------------------------------------------------------
+    # 🛠️ URL FIX: REWRITE LOCALHOST TO CLOUD URL
+    # ---------------------------------------------------------
+    from flask import url_for
+    
+    # 1. Extract just the filename (e.g., "report_123.xlsx")
+    # This strips away "C:/Users/..." or "http://localhost..."
+    raw_url = result_obj.get("file_url", "")
+    filename = os.path.basename(raw_url)
+    
+    # 2. Generate the correct URL for WHOEVER is hosting this app (Render or Local)
+    # 'download_file' is the name of the function handling /download/<filename>
+    # _external=True creates a full absolute URL (http://...)
+    final_url = url_for('download_file', filename=filename, _external=True)
+    
+    # 3. Force HTTPS if running on Render (Cloud uses Proxy, Flask sees HTTP by default)
+    if request.headers.get('X-Forwarded-Proto') == 'https':
+        final_url = final_url.replace('http://', 'https://')
+
+    return jsonify({
+        "success": True, 
+        "data": result_obj["data"], 
+        "download_url": final_url  # <--- Sending the corrected URL
+    })
 
 # --- DOWNLOAD ROUTE (Public - Needed for browser download) ---
 @app.route('/download/<filename>', methods=['GET'])
