@@ -210,7 +210,10 @@ class HybridKeywordGenerator:
         OUTPUT: Raw text list only.
         """
 
+        # --- 🛡️ UPDATED: ROBUST API CALL WITH DEBUG LOGGING ---
         try:
+            print(f"📡 Sending request to Groq Model: llama-3.3-70b-versatile...")
+            
             response = await self.client.post(
                 self.groq_url,
                 headers={"Authorization": f"Bearer {self.groq_key}"},
@@ -220,7 +223,14 @@ class HybridKeywordGenerator:
                     "temperature": 0.2
                 }
             )
+
+            # 🛑 CRITICAL CHECK: Did the API Request Fail?
+            if response.status_code != 200:
+                print(f"❌ CRITICAL AI ERROR: Status {response.status_code}")
+                print(f"⚠️ API Response Body: {response.text}")
+                return {"error": f"AI Error {response.status_code}: {response.text}"}
             
+            # If 200 OK, proceed safely
             content = response.json()["choices"][0]["message"]["content"]
             raw_lines = [line.replace('*', '').strip() for line in content.strip().split('\n') if line.strip()]
             
@@ -260,8 +270,9 @@ class HybridKeywordGenerator:
             }
 
         except Exception as e:
-            print(f"❌ Error: {e}")
-            return {}
+            # 🛑 GLOBAL ERROR CATCHER
+            print(f"❌ CRITICAL PYTHON ERROR: {str(e)}")
+            return {"error": f"Internal Error: {str(e)}"}
 
 def get_hybrid_keywords(product, asin, specs):
     gen = HybridKeywordGenerator()
