@@ -27,38 +27,63 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ---------------------------------------------------------
-# 🔐 SECURITY SYSTEM START
+# 🔐 SECURITY SYSTEM START (Multi-User)
 # ---------------------------------------------------------
 
-# 1. Load Master Password (Default is just a fallback, use ENV in production!)
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "SEVEN-TEAM-2025")
+# 1. Define Users & Credentials
+# NOTE: In a future update, you can move these to a Database.
+USERS = {
+    "admin":   {"password": "Acein@2026",   "role": "super_admin", "name": "Super Admin"},
+    "victor":  {"password": "Victor@2026",  "role": "user",        "name": "Victor"},
+    "stephy":  {"password": "Stephy@2026",  "role": "user",        "name": "Stephy"},
+    "kishore": {"password": "Kishore@2026", "role": "user",        "name": "Kishore"},
+    "sanjana": {"password": "Sanjana@2026", "role": "user",        "name": "Sanjana"}
+}
 
 # 2. Authentication Decorator
 def require_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Allow OPTIONS requests (Pre-flight checks from browser always happen first)
+        # Allow OPTIONS requests
         if request.method == 'OPTIONS':
             return f(*args, **kwargs)
             
-        # Get password from headers
+        # Get token from headers
         token = request.headers.get('X-Access-Token')
         
-        # Check match
-        if not token or token != ADMIN_PASSWORD:
-            return jsonify({"error": "⛔ Unauthorized: Invalid Access Code"}), 401
+        # Check if token matches ANY active user password
+        # (For this simple system, the password acts as the access token)
+        is_valid = False
+        for user_key, user_data in USERS.items():
+            if user_data['password'] == token:
+                is_valid = True
+                break
+                
+        if not token or not is_valid:
+            return jsonify({"error": "⛔ Unauthorized: Please Login Again"}), 401
             
         return f(*args, **kwargs)
     return decorated_function
 
-# 3. Login Route (Verifies the code on the frontend)
+# 3. Login Route (Now checks Username AND Password)
 @app.route('/api/verify-login', methods=['POST'])
 def verify_login():
     data = request.json
-    password = data.get('password')
-    if password == ADMIN_PASSWORD:
-        return jsonify({"success": True, "message": "Login Successful"})
-    return jsonify({"success": False, "message": "Invalid Code"}), 401
+    username = data.get('username', '').lower().strip() # Normalize to lowercase
+    password = data.get('password', '').strip()
+    
+    # Check if user exists and password matches
+    if username in USERS and USERS[username]['password'] == password:
+        user_info = USERS[username]
+        return jsonify({
+            "success": True, 
+            "message": f"Welcome, {user_info['name']}!",
+            "token": user_info['password'], # We use the password as the session token for now
+            "role": user_info['role'],
+            "name": user_info['name']
+        })
+        
+    return jsonify({"success": False, "message": "Invalid Username or Password"}), 401
 
 # ---------------------------------------------------------
 # 🔐 SECURITY SYSTEM END
