@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { BookOpen, Printer, Search, Menu, ChevronRight, LogOut, ShieldCheck } from 'lucide-react';
+import { BookOpen, Printer, Search, Menu, ChevronRight, LogOut, ShieldCheck, User } from 'lucide-react';
 import logoAsset from '../assets/logo.jpg'; 
 
-const DashboardLayout = ({ activeTab, setActiveTab, children }) => {
+// 1. ADDED PROPS: onLogout, userName, userRole
+const DashboardLayout = ({ activeTab, setActiveTab, children, onLogout, userName, userRole }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const menuItems = [
@@ -10,14 +11,6 @@ const DashboardLayout = ({ activeTab, setActiveTab, children }) => {
     { id: 'keyword', label: 'SEO Link Generator', icon: <Search size={20} />, desc: 'ASIN & Keywords' },
     { id: 'sku', label: 'SKU Print Ops', icon: <Printer size={20} />, desc: 'Label Management' },
   ];
-
-  // --- 🆕 LOGOUT LOGIC ---
-  const handleLogout = () => {
-    // 1. Remove the security token
-    localStorage.removeItem('seven_xt_token');
-    // 2. Reload the page (App.jsx will see no token -> Show Login)
-    window.location.reload();
-  };
 
   return (
     <div className="flex h-screen bg-[#F2F4F7] text-slate-900 font-sans selection:bg-brand-100 selection:text-brand-900">
@@ -70,27 +63,38 @@ const DashboardLayout = ({ activeTab, setActiveTab, children }) => {
           })}
         </nav>
 
-        {/* Footer (LOGOUT BUTTON) */}
+        {/* Footer (USER PROFILE & LOGOUT) */}
         <div className="p-4 border-t border-dark-800 bg-dark-950/30">
           
-          {/* Added onClick here 👇 */}
-          <div 
-            onClick={handleLogout} 
-            className="flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 hover:border-red-500/50 transition-all cursor-pointer group border border-transparent"
-            title="Secure Logout"
+          {/* 2. ATTACHED onLogout FUNCTION HERE */}
+          <button 
+            onClick={onLogout} 
+            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 hover:border-red-500/50 transition-all cursor-pointer group border border-transparent text-left"
+            title="Click to Logout"
           >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-600 to-brand-800 flex items-center justify-center text-white font-bold font-heading border-2 border-dark-700 group-hover:border-red-500 transition-all">
-              SX
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-600 to-brand-800 flex items-center justify-center text-white font-bold font-heading border-2 border-dark-700 group-hover:border-red-500 transition-all uppercase">
+              {/* 3. SHOW FIRST LETTER OF USER NAME */}
+              {userName ? userName.charAt(0) : 'U'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-white truncate font-heading group-hover:text-red-400 transition-colors">Admin Console</p>
+              {/* 4. SHOW DYNAMIC USER NAME */}
+              <p className="text-sm font-bold text-white truncate font-heading group-hover:text-red-400 transition-colors capitalize">
+                {userName || 'User'}
+              </p>
               <div className="flex items-center gap-1.5">
-                 <ShieldCheck size={10} className="text-green-500" />
-                 <p className="text-[10px] text-slate-500 truncate">System Operational</p>
+                 {/* Show different text/icon based on role */}
+                 {userRole === 'super_admin' ? (
+                    <ShieldCheck size={10} className="text-green-500" />
+                 ) : (
+                    <User size={10} className="text-brand-400" />
+                 )}
+                 <p className="text-[10px] text-slate-500 truncate group-hover:text-red-400">
+                    Click to Logout
+                 </p>
               </div>
             </div>
             <LogOut size={16} className="text-slate-600 group-hover:text-red-500 transition-colors" />
-          </div>
+          </button>
 
         </div>
 
@@ -113,8 +117,11 @@ const DashboardLayout = ({ activeTab, setActiveTab, children }) => {
           </div>
           <div className="flex items-center gap-6">
               <div className="text-right hidden md:block">
-                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Session</p>
-                 <p className="text-xs font-medium text-slate-700">admin@sevenxt.com</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Session</p>
+                  <p className="text-xs font-medium text-slate-700 lowercase">
+                    {/* 5. SHOW DYNAMIC EMAIL */}
+                    {userName ? `${userName}@sevenxt.com` : 'guest@sevenxt.com'}
+                  </p>
               </div>
           </div>
         </header>

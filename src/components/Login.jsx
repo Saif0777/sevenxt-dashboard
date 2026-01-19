@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, User, LogIn, Loader2 } from 'lucide-react';
-import api from '../services/api';
+import api from '../services/api'; // Ensure this path is correct for your setup
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState('');
@@ -14,19 +14,15 @@ const Login = ({ onLogin }) => {
     setError('');
 
     try {
-      // Send both username and password
       const response = await api.post('/api/verify-login', { 
         username: username,
         password: password 
       });
 
       if (response.data.success) {
-        // Save token and user info
         localStorage.setItem('authToken', response.data.token);
         localStorage.setItem('userName', response.data.name);
         localStorage.setItem('userRole', response.data.role);
-        
-        // Pass the token up to the parent App
         onLogin(response.data.token);
       }
     } catch (err) {
@@ -39,7 +35,6 @@ const Login = ({ onLogin }) => {
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        
         <div className="text-center mb-8">
           <div className="bg-brand-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
             <Lock className="text-brand-600" size={32} />
@@ -49,8 +44,6 @@ const Login = ({ onLogin }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* Username Input */}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Username</label>
             <div className="relative">
@@ -66,7 +59,6 @@ const Login = ({ onLogin }) => {
             </div>
           </div>
 
-          {/* Password Input */}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Password</label>
             <div className="relative">
@@ -96,7 +88,6 @@ const Login = ({ onLogin }) => {
             {loading ? <Loader2 className="animate-spin" /> : <LogIn size={20} />}
             {loading ? 'Verifying...' : 'Sign In'}
           </button>
-
         </form>
       </div>
     </div>

@@ -26,18 +26,33 @@ IMAGE_FOLDER_ABSOLUTE = os.path.join(BASE_DIR, 'static', 'labels')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ---------------------------------------------------------
-# 🔐 SECURITY SYSTEM START (Multi-User)
-# ---------------------------------------------------------
-
-# 1. Define Users & Credentials
-# NOTE: In a future update, you can move these to a Database.
+# 🔐 SECURITY SYSTEM START (Multi-User Safe Mode)
 USERS = {
-    "admin":   {"password": "Acein@2026",   "role": "super_admin", "name": "Super Admin"},
-    "victor":  {"password": "Victor@2026",  "role": "user",        "name": "Victor"},
-    "stephy":  {"password": "Stephy@2026",  "role": "user",        "name": "Stephy"},
-    "kishore": {"password": "Kishore@2026", "role": "user",        "name": "Kishore"},
-    "sanjana": {"password": "Sanjana@2026", "role": "user",        "name": "Sanjana"}
+    "admin": {
+        "password": os.getenv("PASS_ADMIN", "AdminTemp123"), # Fallback only for local testing
+        "role": "super_admin", 
+        "name": "Super Admin"
+    },
+    "victor": {
+        "password": os.getenv("PASS_VICTOR", "VicTemp123"), 
+        "role": "user",        
+        "name": "Victor"
+    },
+    "stephy": {
+        "password": os.getenv("PASS_STEPHY", "StephTemp123"), 
+        "role": "user",        
+        "name": "Stephy"
+    },
+    "kishore": {
+        "password": os.getenv("PASS_KISHORE", "KishTemp123"), 
+        "role": "user",        
+        "name": "Kishore"
+    },
+    "sanjana": {
+        "password": os.getenv("PASS_SANJANA", "SanTemp123"), 
+        "role": "user",        
+        "name": "Sanjana"
+    }
 }
 
 # 2. Authentication Decorator
