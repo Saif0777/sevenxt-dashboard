@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Printer, Search, Menu, ChevronRight, LogOut, ShieldCheck, User } from 'lucide-react';
+import { BookOpen, Printer, Search, Menu, ChevronRight, LogOut, ShieldCheck, User, Zap } from 'lucide-react';
 import logoAsset from '../assets/logo.jpg'; 
 
 // 1. ADDED PROPS: onLogout, userName, userRole
@@ -8,7 +8,11 @@ const DashboardLayout = ({ activeTab, setActiveTab, children, onLogout, userName
 
   const menuItems = [
     { id: 'blog', label: 'Amazon Blog Engine', icon: <BookOpen size={20} />, desc: 'Product to Post' },
-    { id: 'keyword', label: 'SEO Link Generator', icon: <Search size={20} />, desc: 'ASIN & Keywords' },
+    { id: 'keyword', label: 'SEO Link Generator', icon: <Zap size={20} />, desc: 'ASIN & Keywords' },
+    
+    // ✅ NEW MENU ITEM
+    { id: 'suggestions', label: 'Keyword Generation', icon: <Search size={20} />, desc: 'Market Research' }, 
+    
     { id: 'sku', label: 'SKU Print Ops', icon: <Printer size={20} />, desc: 'Label Management' },
   ];
 

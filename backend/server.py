@@ -14,6 +14,7 @@ from features.blog_wrapper import start_blog_automation
 from features.keyword_gen.ai_keywords import get_hybrid_keywords
 from features.blog_posting.core.generate_blog import search_trending_topics
 from features.amazon_details import get_product_details
+from features.amazon_suggestions import run_suggestion_scraper
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
@@ -222,6 +223,43 @@ def catch_all(path):
 @app.route('/assets/<path:path>')
 def proxy_assets(path):
     return send_from_directory('static/assets', path)
+
+# --- ROUTE 6: BULK AMAZON SUGGESTIONS ---
+@app.route('/api/bulk-suggestions', methods=['POST'])
+@require_auth
+def bulk_suggestions_route():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
+
+    try:
+        # Save Input File
+        import time
+        filename = f"input_{int(time.time())}_{file.filename}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+
+        # Process
+        result = run_suggestion_scraper(filepath, UPLOAD_FOLDER)
+
+        if not result['success']:
+            return jsonify({"error": result['error']}), 500
+
+        # URL Fix (Same as before)
+        final_url = request.host_url.rstrip('/') + result['file_url']
+        if request.headers.get('X-Forwarded-Proto') == 'https':
+            final_url = final_url.replace('http://', 'https://')
+
+        return jsonify({
+            "success": True,
+            "download_url": final_url
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print("Server running on Port 5000")
